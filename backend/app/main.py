@@ -2,7 +2,12 @@
 # It initializes the FastAPI app, sets up the database, and includes the API routes.
 
 from fastapi import FastAPI
-from database import init_db
+from app.routes import (
+    auth_routes,
+    portfolio_routes,
+    transaction_routes,
+)
+from app.database import init_db
 
 
 app = FastAPI(
@@ -11,6 +16,13 @@ app = FastAPI(
 
 # Initialize DB
 init_db()
+
+# Wire Routes
+app.include_router(auth_routes.router, prefix="/auth", tags=["auth"])
+app.include_router(
+    transaction_routes.router, prefix="/transaction", tags=["transaction"]
+)
+app.include_router(portfolio_routes.router, prefix="/portfolio", tags=["portfolio"])
 
 
 @app.get("/")
