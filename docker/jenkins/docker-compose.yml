@@ -1,0 +1,15 @@
+version: "3.9"
+
+services:
+  jenkins:
+    build: .
+    container_name: aegiscare-jenkins
+    ports:
+      - "8080:8080"      # Jenkins Web UI
+      - "50000:50000"    # Agent communication
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock #Docker Socket: allows Jenkins in the container to access your host Docker engine.
+
+volumes:
+  jenkins_home:

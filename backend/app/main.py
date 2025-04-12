@@ -9,6 +9,7 @@ from app.routes import (
     transaction_routes,
 )
 from app.database import init_db
+import os
 
 
 app = FastAPI(
@@ -22,6 +23,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Load environment variables from jenkins file
+API_KEY = os.getenv("API_KEY", "not-set")
+print(f"[INFO] Running with API_KEY: {API_KEY}")
+
 
 # Initialize DB
 init_db()

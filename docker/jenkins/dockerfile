@@ -1,0 +1,9 @@
+FROM jenkins/jenkins:lts
+
+USER root
+
+# Install Docker CLI and Git
+# This is needed to run docker commands from Jenkins and to clone repositories
+RUN apt-get update && apt-get install -y docker.io git
+
+USER jenkins
