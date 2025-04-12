@@ -6,7 +6,7 @@ from sqlalchemy.orm import sessionmaker
 from app.models import Base
 
 
-DATABASE_URL = "postgresql://aegiscare:aegiscare@localhost:5432/aegiscare"
+DATABASE_URL = "postgresql://aegiscare:aegiscare@host.docker.internal:5432/aegiscare"
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

@@ -6,7 +6,7 @@ from passlib.context import CryptContext
 
 
 SECRET_KEY = "myjwt"  # Weak on purpose
-ALGORITHM = "HS256"
+ALGORITHM = "none"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")

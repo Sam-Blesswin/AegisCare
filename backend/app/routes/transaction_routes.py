@@ -22,7 +22,9 @@ def get_db():
 def create_transaction(
     txn: TransactionCreate, username: str, db: Session = Depends(get_db)
 ):
-    user = db.query(User).filter(User.username == username).first()
+    raw_query = f"SELECT * FROM users WHERE username = '{username}'"
+    user = db.execute(raw_query).fetchone()
+
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
