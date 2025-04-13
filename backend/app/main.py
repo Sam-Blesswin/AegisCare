@@ -24,10 +24,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Load environment variables from jenkins file
-API_KEY = os.getenv("API_KEY", "not-set")
-print(f"[INFO] Running with API_KEY: {API_KEY}")
-
 
 # Initialize DB
 init_db()
@@ -42,4 +38,11 @@ app.include_router(portfolio_routes.router, prefix="/portfolio", tags=["portfoli
 
 @app.get("/")
 def health_check():
-    return {"message": "AegisCare API is running"}
+    pod_name = os.getenv("HOSTNAME", "unknown")
+    node_name = os.getenv("NODE_NAME", "unknown")
+
+    return {
+        "pod_name": pod_name,
+        "node_name": node_name,
+        "message": "AegisCare API is running",
+    }

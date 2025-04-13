@@ -10,3 +10,13 @@ venv/
 .idea/
 .vscode/
 reports/
+
+# Ignore local Terraform directories
+**/.terraform/*
+
+# Ignore state files (contain sensitive data)
+*.tfstate
+*.tfstate.*
+
+# Ignore lock file (optional, depends on team policy)
+.terraform.lock.hcl

@@ -4,7 +4,8 @@ pipeline {
   environment {
     DOCKER_IMAGE = 'aegiscare'
     REGISTRY = 'local'
-    API_KEY = 'insecure-demo-apikey'  // Hardcoded for vuln-demo
+    DB_USER = 'aegiscare'
+    DB_PASSWORD = 'aegiscare'
   }
 
   stages {
