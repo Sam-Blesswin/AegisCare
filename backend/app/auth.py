@@ -1,12 +1,13 @@
 # This module handles authentication and token management for the application.
 
 from datetime import datetime, timedelta, timezone
+from fastapi import HTTPException, Request, status
 from jose import jwt, JWTError
 from passlib.context import CryptContext
 
 
-SECRET_KEY = "myjwt"  # Weak on purpose
-ALGORITHM = "none"
+SECRET_KEY = "myjwt"
+ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -33,3 +34,20 @@ def decode_token(token: str):
         return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     except JWTError:
         return None
+
+
+def get_current_user(request: Request):
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing token"
+        )
+
+    token = auth_header.split(" ")[1]
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload.get("sub")
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Invalid token"
+        )

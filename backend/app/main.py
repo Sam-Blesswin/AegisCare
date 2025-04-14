@@ -4,11 +4,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
-from app.routes import (
-    auth_routes,
-    portfolio_routes,
-    transaction_routes,
-)
+from app.routes import auth_routes, portfolio_routes, transaction_routes, report_routes
 from app.database import init_db
 import os
 
@@ -37,6 +33,7 @@ app.include_router(
     transaction_routes.router, prefix="/transaction", tags=["transaction"]
 )
 app.include_router(portfolio_routes.router, prefix="/portfolio", tags=["portfolio"])
+app.include_router(report_routes.router, prefix="/report", tags=["report"])
 
 
 @app.get("/")

@@ -3,29 +3,28 @@
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from app.database import SessionLocal
+from app.database import SessionLocal, get_db
 from app.models import User, Transaction
+from sqlalchemy import text
 
 router = APIRouter()
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
 @router.get("/")
 def get_portfolio(username: str, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.username == username).first()
+    raw_query = text(f"SELECT * FROM users WHERE username = '{username}'")
+    user = db.execute(raw_query).fetchone()
+
     if not user:
         return {"portfolio": []}
-    txns = db.query(Transaction).filter(Transaction.user_id == user.id).all()
+
+    user_id = user[0]
+
+    txns = db.execute(
+        text(f"SELECT * FROM transactions WHERE user_id = {user_id}")
+    ).fetchall()
+
     return {
         "username": username,
-        "portfolio": [
-            {"asset": t.asset, "action": t.action, "amount": t.amount} for t in txns
-        ],
+        "portfolio": [{"asset": t[2], "action": t[3], "amount": t[4]} for t in txns],
     }

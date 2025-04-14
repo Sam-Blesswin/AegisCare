@@ -1,8 +1,10 @@
 # This module handles the report-related routes for the application.
 # It includes routes for fetching external URLs and handling redirects.
 
-from fastapi import APIRouter, requests
+from fastapi import APIRouter
 from fastapi.responses import RedirectResponse
+import requests
+
 
 router = APIRouter()
 

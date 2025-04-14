@@ -1,30 +1,20 @@
-# This file handles transaction-related routes, including creating new transactions.
-# Unprotected Route
-
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import Depends, APIRouter, HTTPException
 from sqlalchemy.orm import Session
-from app.database import SessionLocal
+from app.auth import get_current_user
+from app.database import SessionLocal, get_db
 from app.models import Transaction, User
 from app.schemas import TransactionCreate
 
 router = APIRouter()
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
 @router.post("/")
 def create_transaction(
-    txn: TransactionCreate, username: str, db: Session = Depends(get_db)
+    txn: TransactionCreate,
+    db: Session = Depends(get_db),
+    username: str = Depends(get_current_user),
 ):
-    raw_query = f"SELECT * FROM users WHERE username = '{username}'"
-    user = db.execute(raw_query).fetchone()
-
+    user = db.query(User).filter(User.username == username).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -33,4 +23,5 @@ def create_transaction(
     )
     db.add(new_txn)
     db.commit()
-    return {"message": "Transaction recorded."}
+    db.refresh(new_txn)
+    return {"transaction": new_txn}
