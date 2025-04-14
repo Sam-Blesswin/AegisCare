@@ -3,6 +3,7 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_fastapi_instrumentator import Instrumentator
 from app.routes import (
     auth_routes,
     portfolio_routes,
@@ -24,6 +25,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Prometheus metrics
+Instrumentator().instrument(app).expose(app)
 
 # Initialize DB
 init_db()

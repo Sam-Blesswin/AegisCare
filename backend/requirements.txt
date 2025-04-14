@@ -11,6 +11,8 @@ httptools==0.6.4
 idna==3.10
 jose==1.0.0
 passlib==1.7.4
+prometheus-fastapi-instrumentator==7.1.0
+prometheus_client==0.21.1
 psycopg2-binary==2.9.10
 pyasn1==0.4.8
 pycparser==2.22
