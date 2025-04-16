@@ -14,9 +14,9 @@ spec:
         app: aegiscare
     spec:
       containers:
-        - name: backend
-          image: aegiscare:latest
-          imagePullPolicy: Never
+        - name: aegiscare
+          image: samblesswin/aegiscare:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8000
           env:

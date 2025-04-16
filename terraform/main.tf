@@ -8,7 +8,7 @@ terraform {
 }
 
 provider "kubernetes" {
-  config_path    = "~/.kube/config"
+  config_path    = "/root/.kube/config"
   config_context = "kind-aegiscare"
 }
 

@@ -1,134 +1,151 @@
 pipeline {
-    agent none
+  agent none
 
-    environment {
-        SONAR_PROJECT_KEY = 'aegiscare'
-        SONAR_LOGIN = 'sqa_9c413c3a0a68239988395f1756269c78e78acaf0'
+  environment {
+    SONAR_PROJECT_KEY = "aegiscare"
+    SONAR_HOST_URL = "http://host.docker.internal:9000"
+    SONAR_LOGIN = "sqa_9c413c3a0a68239988395f1756269c78e78acaf0"
+    KUBECONFIG = "/root/.kube/config" // ✅ So kubectl knows what context to use
+    DOCKER_IMAGE = 'samblesswin/aegiscare:latest'
+  }
+
+  stages {
+    stage('Static Analysis - SonarQube') {
+      agent {
+        docker {
+          image 'sonarsource/sonar-scanner-cli:latest'
+        }
+      }
+      steps {
+        sh '''
+          echo "\\n===== 📊 SONARQUBE ANALYSIS =====" >> build_report.txt
+          sonar-scanner \
+            -Dsonar.projectKey=$SONAR_PROJECT_KEY \
+            -Dsonar.sources=backend \
+            -Dsonar.host.url=$SONAR_HOST_URL \
+            -Dsonar.login=$SONAR_LOGIN >> build_report.txt 2>&1 || true
+        '''
+      }
     }
 
-    stages {
+    stage('Run in Docker') {
+      agent {
+        docker {
+          image 'samblesswin/ci-tools:latest'
+        }
+      }
+
+      stages {
         stage('Checkout Code') {
-            agent any
-            steps {
-                git branch: 'vuln-demo', url: 'https://github.com/Sam-Blesswin/AegisCare.git'
-                sh 'echo "===== CI/CD BUILD REPORT =====" > build_report.txt'
-                sh 'echo "🔁 Commit: $(git rev-parse HEAD)" >> build_report.txt'
-                sh 'echo "📆 Timestamp: $(date)" >> build_report.txt'
-            }
+          steps {
+            git branch: 'vuln-demo', url: 'https://github.com/Sam-Blesswin/AegisCare.git'
+            sh '''
+              echo "===== CI/CD BUILD REPORT =====" > build_report.txt
+              echo "🔁 Commit: $(git rev-parse HEAD)" >> build_report.txt
+              echo "📆 Timestamp: $(date)" >> build_report.txt
+            '''
+          }
         }
 
-        stage('Static Analysis - SonarQube') {
-            agent {
-                docker {
-                    image 'sonarsource/sonar-scanner-cli:latest'
-                }
-            }
-            steps {
-                sh '''
-                echo "\\n===== 📊 SONARQUBE ANALYSIS =====" >> build_report.txt
-                sonar-scanner \
-                  -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
-                  -Dsonar.projectName=AegisCare \
-                  -Dsonar.host.url=http://host.docker.internal:9000 \
-                  -Dsonar.login=${SONAR_LOGIN} >> build_report.txt 2>&1 || true
-                '''
-            }
+        stage('Python Vuln Scan - Bandit') {
+          steps {
+            sh '''
+              echo "\\n===== 🔍 BANDIT PYTHON SCAN =====" >> build_report.txt
+              bandit -r backend >> build_report.txt 2>&1 || true
+            '''
+          }
         }
 
         stage('Secrets Scan - Gitleaks') {
-            agent {
-                docker {
-                    image 'zricethezav/gitleaks:latest'
-                }
-            }
-            steps {
-                sh '''
-                echo "\\n===== 🔐 GITLEAKS SCAN =====" >> build_report.txt
-                gitleaks detect --source . --no-banner --verbose >> build_report.txt 2>&1 || true
-                '''
-            }
+          steps {
+            sh '''
+              echo "\\n===== 🔐 GITLEAKS SCAN =====" >> build_report.txt
+              gitleaks detect --source . --no-banner --verbose >> build_report.txt 2>&1 || true
+            '''
+          }
         }
+
+        stage('Infra Scan - Checkov') {
+          steps {
+            sh '''
+              echo "\\n===== ☁️ CHECKOV (Terraform & K8s) =====" >> build_report.txt
+              checkov -d terraform >> build_report.txt 2>&1 || true
+              checkov -d k8s >> build_report.txt 2>&1 || true
+            '''
+          }
+        }
+
+        stage('Build Docker Image') {
+          agent {
+    docker {
+      image 'samblesswin/ci-tools:latest'
+      args  '-v /var/run/docker.sock:/var/run/docker.sock'
+    }
+  }
+  steps {
+    sh '''
+    echo "===== 🛠️ DOCKER BUILD =====" >> build_report.txt
+    docker build -t $DOCKER_IMAGE ./backend >> build_report.txt 2>&1
+    '''
+  }
+}
 
         stage('Image Scan - Trivy') {
-            agent {
-                docker {
-                    image 'aquasec/trivy:latest'
-                }
-            }
-            steps {
-                sh '''
-                echo "\\n===== 🛡️ TRIVY IMAGE SCAN =====" >> build_report.txt
-                trivy image aegiscare:latest >> build_report.txt 2>&1 || true
-                '''
-            }
+          steps {
+            sh '''
+              echo "\\n===== 🐳 TRIVY IMAGE SCAN =====" >> build_report.txt
+              trivy image aegiscare:latest >> build_report.txt 2>&1 || true
+            '''
+          }
         }
 
-        stage('Docker Build') {
-            agent any
-            steps {
-                script {
-                    def start = System.currentTimeMillis()
-                    sh '''
-                    echo "\\n===== 🐳 DOCKER BUILD =====" >> build_report.txt
-                    docker build --progress=plain -t aegiscare:latest ./backend >> build_report.txt 2>&1
-                    '''
-                    def end = System.currentTimeMillis()
-                    def duration = (end - start) / 1000
-                    sh "echo '🕒 Docker Build Time: ${duration}s' >> build_report.txt"
-                }
-            }
-        }
-
-        stage('Kind Image Load') {
-            agent any
-            steps {
-                sh '''
-                echo "\\n===== 📦 KIND IMAGE LOAD =====" >> build_report.txt
-                kind load docker-image aegiscare:latest --name aegiscare >> build_report.txt 2>&1 || true
-                '''
-            }
-        }
+        stage('Push Docker Image') {
+          agent {
+    docker {
+      image 'samblesswin/ci-tools:latest'
+      args  '-v /var/run/docker.sock:/var/run/docker.sock'
+    }
+  }
+  steps {
+    withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+      sh '''
+      echo "===== 🚀 DOCKER PUSH =====" >> build_report.txt
+      echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin >> build_report.txt 2>&1
+      docker push $DOCKER_IMAGE >> build_report.txt 2>&1
+      '''
+    }
+  }
+}
 
         stage('Terraform Apply') {
-            agent {
-                docker {
-                    image 'hashicorp/terraform:light'
-                }
+          steps {
+            dir('terraform') {
+              sh '''
+                echo "\\n===== ☁️ TERRAFORM APPLY =====" >> ../build_report.txt
+                terraform init >> ../build_report.txt 2>&1
+                terraform apply -auto-approve >> ../build_report.txt 2>&1
+              '''
             }
-            steps {
-                dir('terraform') {
-                    sh '''
-                    echo "\\n===== 🏗️ TERRAFORM DEPLOYMENT =====" >> ../build_report.txt
-                    terraform init >> ../build_report.txt 2>&1
-                    terraform apply -auto-approve >> ../build_report.txt 2>&1
-                    '''
-                }
-            }
+          }
         }
 
-        stage('Kubernetes Deploy') {
-            agent {
-                docker {
-                    image 'bitnami/kubectl:latest'
-                }
-            }
-            steps {
-                sh '''
-                echo "\\n===== ☸️ K8S DEPLOYMENT =====" >> build_report.txt
-                kubectl apply -f k8s/deployment.yaml -n staging >> build_report.txt 2>&1
-                kubectl apply -f k8s/service.yaml -n staging >> build_report.txt 2>&1
-                kubectl apply -f k8s/hpa.yaml -n staging >> build_report.txt 2>&1
-                kubectl rollout status deployment/aegiscare-app -n staging >> build_report.txt 2>&1
-                kubectl get events -n staging >> build_report.txt 2>&1
-                '''
-            }
+        stage('Deploy to Kubernetes') {
+          steps {
+            sh '''
+              echo "\\n===== 🚀 KUBERNETES DEPLOYMENT =====" >> build_report.txt
+              kubectl apply -f k8s/ -n staging >> build_report.txt 2>&1
+            '''
+          }
         }
+      }
     }
+  }
 
-    post {
-        always {
-            archiveArtifacts artifacts: 'build_report.txt', allowEmptyArchive: false
-            echo '📄 Build report archived as build_report.txt'
-        }
+  post {
+    always {
+      node('built-in') {
+        archiveArtifacts artifacts: 'build_report.txt', onlyIfSuccessful: false
+      }
     }
+  }
 }

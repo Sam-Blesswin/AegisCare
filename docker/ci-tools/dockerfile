@@ -1,0 +1,41 @@
+FROM python:3.10-slim
+
+LABEL maintainer="Sam Blesswin"
+LABEL description="Unified CI Tools image for DevSecOps pipelines"
+
+# Install basic CLI tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl git unzip wget jq ca-certificates gnupg lsb-release \
+ && rm -rf /var/lib/apt/lists/*
+
+# Install Python security tools
+RUN pip install --no-cache-dir bandit checkov
+
+# Install Trivy (image scanning)
+RUN curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+
+# Install Gitleaks (secrets scanner)
+RUN curl -sSL https://github.com/gitleaks/gitleaks/releases/latest/download/gitleaks-linux-amd64 \
+    -o /usr/local/bin/gitleaks \
+ && chmod +x /usr/local/bin/gitleaks
+
+# Install Terraform
+RUN wget -q https://releases.hashicorp.com/terraform/1.7.5/terraform_1.7.5_linux_amd64.zip \
+ && unzip terraform_1.7.5_linux_amd64.zip -d /usr/local/bin \
+ && rm terraform_1.7.5_linux_amd64.zip
+
+# Install kubectl
+# Install kubectl v1.32.3
+RUN curl -LO "https://dl.k8s.io/release/v1.32.3/bin/linux/amd64/kubectl" \
+ && install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl \
+ && rm kubectl
+
+
+# Add non-root user (optional for secure-demo branch)
+RUN useradd -ms /bin/bash ciuser
+USER ciuser
+WORKDIR /home/ciuser
+
+ENTRYPOINT []
+CMD [ "tail", "-f", "/dev/null" ]
+
