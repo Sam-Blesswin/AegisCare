@@ -4,13 +4,11 @@ pipeline {
   environment {
     SONAR_PROJECT_KEY = "aegiscare"
     SONAR_HOST_URL    = "http://host.docker.internal:9000"
-    SONAR_LOGIN       = "sqa_9c413c3a0a68239988395f1756269c78e78acaf0" // ❌ bad practice in vuln-demo
-    KUBECONFIG        = "/root/.kube/config" // Required by Terraform & kubectl
+    SONAR_LOGIN       = "sqa_9c413c3a0a68239988395f1756269c78e78acaf0" 
     DOCKER_IMAGE      = "samblesswin/aegiscare:latest"
   }
 
   stages {
-    // ✅ Checkout First
     stage('Checkout Code') {
       agent {
         docker { image 'samblesswin/ci-tools:latest' }
@@ -19,26 +17,27 @@ pipeline {
         git branch: 'vuln-demo', url: 'https://github.com/Sam-Blesswin/AegisCare.git'
         sh '''
           echo "===== CI/CD BUILD REPORT =====" > build_report.txt
-          echo "🔁 Commit: $(git rev-parse HEAD)" >> build_report.txt
-          echo "📆 Timestamp: $(date)" >> build_report.txt
+          echo "Commit: $(git rev-parse HEAD)" >> build_report.txt
+          echo "Timestamp: $(date)" >> build_report.txt
         '''
       }
     }
 
-    // ✅ SonarQube Static Code Analysis
     stage('Static Analysis - SonarQube') {
       agent {
         docker { image 'sonarsource/sonar-scanner-cli:latest' }
       }
       steps {
         sh '''
-          echo "\\n===== 📊 SONARQUBE ANALYSIS =====" >> build_report.txt
+          echo "\n===== SONARQUBE ANALYSIS =====" >> build_report.txt
           sonar-scanner \
             -Dsonar.projectKey=$SONAR_PROJECT_KEY \
             -Dsonar.sources=backend \
-            -Dsonar.language=py \
             -Dsonar.host.url=$SONAR_HOST_URL \
             -Dsonar.login=$SONAR_LOGIN >> build_report.txt 2>&1 || true
+
+          curl -s "$SONAR_HOST_URL/api/issues/search?componentKeys=$SONAR_PROJECT_KEY&types=BUG,VULNERABILITY,CODE_SMELL" \
+            -u "$SONAR_LOGIN:" >> build_report.txt
         '''
       }
     }
@@ -52,63 +51,62 @@ pipeline {
       }
 
       stages {
-        // ✅ Bandit
         stage('Python Vuln Scan - Bandit') {
           steps {
             sh '''
-              echo "\\n===== 🔍 BANDIT PYTHON SCAN =====" >> build_report.txt
-              bandit -r backend >> build_report.txt 2>&1 || true
+              echo "\n===== BANDIT PYTHON SCAN =====" >> build_report.txt
+              bandit -r backend --format json > bandit.json || true
+              jq '.' bandit.json >> build_report.txt || true
             '''
           }
         }
 
-        // ✅ Gitleaks
         stage('Secrets Scan - Gitleaks') {
           steps {
             sh '''
-              echo "\\n===== 🔐 GITLEAKS SCAN =====" >> build_report.txt
-              gitleaks detect --source . --no-banner --verbose >> build_report.txt 2>&1 || true
+              echo "\n===== GITLEAKS SCAN =====" >> build_report.txt
+              gitleaks detect --source . --report-format=json --report-path=gitleaks.json || true
+              jq '.' gitleaks.json >> build_report.txt || true
             '''
           }
         }
 
-        // ✅ Checkov
         stage('Infra Scan - Checkov') {
           steps {
             sh '''
-              echo "\\n===== ☁️ CHECKOV (Terraform & K8s) =====" >> build_report.txt
-              checkov -d terraform >> build_report.txt 2>&1 || true
-              checkov -d k8s >> build_report.txt 2>&1 || true
+              echo "\n===== CHECKOV (Terraform & K8s) =====" >> build_report.txt
+              ccheckov -d terraform --output json | jq '.results.failed_checks[] | {check_id, resource, file_path, severity, check_name}' > checkov_summary.json || true
+              jq '.' checkov_summary.json >> build_report.txt || true
+              checkov -d k8s --output json | jq '.results.failed_checks[] | {check_id, resource, file_path, severity, check_name}' > checkov_k8s_summary.json || true
+              jq '.' checkov_k8s_summary.json >> build_report.txt || true
             '''
           }
         }
 
-        // ✅ Docker Build
         stage('Build Docker Image') {
           steps {
             sh '''
-              echo "\\n===== 🛠️ DOCKER BUILD =====" >> build_report.txt
+              echo "\n===== DOCKER BUILD =====" >> build_report.txt
               docker build -t $DOCKER_IMAGE ./backend >> build_report.txt 2>&1
             '''
           }
         }
 
-        // ✅ Trivy
         stage('Image Scan - Trivy') {
           steps {
             sh '''
-              echo "\\n===== 🐳 TRIVY IMAGE SCAN =====" >> build_report.txt
-              trivy image $DOCKER_IMAGE >> build_report.txt 2>&1 || true
+              echo "\n===== TRIVY IMAGE SCAN =====" >> build_report.txt
+              trivy image --format json -o trivy.json $DOCKER_IMAGE || true
+              jq '.' trivy.json >> build_report.txt || true
             '''
           }
         }
 
-        // ✅ Push to Docker Hub
         stage('Push Docker Image') {
           steps {
             withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
               sh '''
-                echo "\\n===== 🚀 DOCKER PUSH =====" >> build_report.txt
+                echo "\n===== DOCKER PUSH =====" >> build_report.txt
                 echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin >> build_report.txt 2>&1
                 docker push $DOCKER_IMAGE >> build_report.txt 2>&1
               '''
@@ -116,12 +114,11 @@ pipeline {
           }
         }
 
-        // ✅ Terraform
         stage('Terraform Apply') {
           steps {
             dir('terraform') {
               sh '''
-                echo "\\n===== ☁️ TERRAFORM APPLY =====" >> ../build_report.txt
+                echo "\n===== TERRAFORM APPLY =====" >> ../build_report.txt
                 terraform init >> ../build_report.txt 2>&1
                 terraform apply -auto-approve >> ../build_report.txt 2>&1
               '''
@@ -129,12 +126,22 @@ pipeline {
           }
         }
 
-        // ✅ K8s Deploy
         stage('Deploy to Kubernetes') {
           steps {
             sh '''
-              echo "\\n===== 🚀 KUBERNETES DEPLOYMENT =====" >> build_report.txt
-              kubectl apply -f k8s/ -n staging >> build_report.txt 2>&1
+              echo "\n===== KUBERNETES DEPLOYMENT =====" >> build_report.txt
+              kubectl apply -f k8s/deployment.yml -n staging --validate=false --insecure-skip-tls-verify=true >> build_report.txt 2>&1
+              kubectl apply -f k8s/service.yml -n staging --validate=false --insecure-skip-tls-verify=true >> build_report.txt 2>&1
+              kubectl apply -f k8s/hpa.yml -n staging --validate=false --insecure-skip-tls-verify=true >> build_report.txt 2>&1
+            '''
+          }
+        }
+
+        stage('Restart Pods') {
+          steps {
+            sh '''
+              echo "\n===== ROLLOUT RESTART =====" >> build_report.txt
+              kubectl rollout restart deployment aegiscare-app -n staging --insecure-skip-tls-verify=true >> build_report.txt 2>&1 || true
             '''
           }
         }
