@@ -5,7 +5,7 @@ LABEL description="Unified CI Tools image for DevSecOps pipelines"
 
 # Install basic CLI tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl git unzip wget jq ca-certificates gnupg lsb-release \
+    curl git unzip wget docker.io jq ca-certificates gnupg lsb-release \
  && rm -rf /var/lib/apt/lists/*
 
 # Install Python security tools

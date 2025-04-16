@@ -10,6 +10,7 @@ terraform {
 provider "kubernetes" {
   config_path    = "/root/.kube/config"
   config_context = "kind-aegiscare"
+  insecure       = true # Set to true for insecure connections #local CI/CD to work in docker
 }
 
 resource "kubernetes_namespace" "staging" {

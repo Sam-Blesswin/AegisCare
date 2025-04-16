@@ -3,18 +3,32 @@ pipeline {
 
   environment {
     SONAR_PROJECT_KEY = "aegiscare"
-    SONAR_HOST_URL = "http://host.docker.internal:9000"
-    SONAR_LOGIN = "sqa_9c413c3a0a68239988395f1756269c78e78acaf0"
-    KUBECONFIG = "/root/.kube/config" // ✅ So kubectl knows what context to use
-    DOCKER_IMAGE = 'samblesswin/aegiscare:latest'
+    SONAR_HOST_URL    = "http://host.docker.internal:9000"
+    SONAR_LOGIN       = "sqa_9c413c3a0a68239988395f1756269c78e78acaf0" // ❌ bad practice in vuln-demo
+    KUBECONFIG        = "/root/.kube/config" // Required by Terraform & kubectl
+    DOCKER_IMAGE      = "samblesswin/aegiscare:latest"
   }
 
   stages {
+    // ✅ Checkout First
+    stage('Checkout Code') {
+      agent {
+        docker { image 'samblesswin/ci-tools:latest' }
+      }
+      steps {
+        git branch: 'vuln-demo', url: 'https://github.com/Sam-Blesswin/AegisCare.git'
+        sh '''
+          echo "===== CI/CD BUILD REPORT =====" > build_report.txt
+          echo "🔁 Commit: $(git rev-parse HEAD)" >> build_report.txt
+          echo "📆 Timestamp: $(date)" >> build_report.txt
+        '''
+      }
+    }
+
+    // ✅ SonarQube Static Code Analysis
     stage('Static Analysis - SonarQube') {
       agent {
-        docker {
-          image 'sonarsource/sonar-scanner-cli:latest'
-        }
+        docker { image 'sonarsource/sonar-scanner-cli:latest' }
       }
       steps {
         sh '''
@@ -22,31 +36,23 @@ pipeline {
           sonar-scanner \
             -Dsonar.projectKey=$SONAR_PROJECT_KEY \
             -Dsonar.sources=backend \
+            -Dsonar.language=py \
             -Dsonar.host.url=$SONAR_HOST_URL \
             -Dsonar.login=$SONAR_LOGIN >> build_report.txt 2>&1 || true
         '''
       }
     }
 
-    stage('Run in Docker') {
+    stage('Run CI Tools') {
       agent {
         docker {
           image 'samblesswin/ci-tools:latest'
+          args  '-v /var/run/docker.sock:/var/run/docker.sock'
         }
       }
 
       stages {
-        stage('Checkout Code') {
-          steps {
-            git branch: 'vuln-demo', url: 'https://github.com/Sam-Blesswin/AegisCare.git'
-            sh '''
-              echo "===== CI/CD BUILD REPORT =====" > build_report.txt
-              echo "🔁 Commit: $(git rev-parse HEAD)" >> build_report.txt
-              echo "📆 Timestamp: $(date)" >> build_report.txt
-            '''
-          }
-        }
-
+        // ✅ Bandit
         stage('Python Vuln Scan - Bandit') {
           steps {
             sh '''
@@ -56,6 +62,7 @@ pipeline {
           }
         }
 
+        // ✅ Gitleaks
         stage('Secrets Scan - Gitleaks') {
           steps {
             sh '''
@@ -65,6 +72,7 @@ pipeline {
           }
         }
 
+        // ✅ Checkov
         stage('Infra Scan - Checkov') {
           steps {
             sh '''
@@ -75,48 +83,40 @@ pipeline {
           }
         }
 
+        // ✅ Docker Build
         stage('Build Docker Image') {
-          agent {
-    docker {
-      image 'samblesswin/ci-tools:latest'
-      args  '-v /var/run/docker.sock:/var/run/docker.sock'
-    }
-  }
-  steps {
-    sh '''
-    echo "===== 🛠️ DOCKER BUILD =====" >> build_report.txt
-    docker build -t $DOCKER_IMAGE ./backend >> build_report.txt 2>&1
-    '''
-  }
-}
-
-        stage('Image Scan - Trivy') {
           steps {
             sh '''
-              echo "\\n===== 🐳 TRIVY IMAGE SCAN =====" >> build_report.txt
-              trivy image aegiscare:latest >> build_report.txt 2>&1 || true
+              echo "\\n===== 🛠️ DOCKER BUILD =====" >> build_report.txt
+              docker build -t $DOCKER_IMAGE ./backend >> build_report.txt 2>&1
             '''
           }
         }
 
-        stage('Push Docker Image') {
-          agent {
-    docker {
-      image 'samblesswin/ci-tools:latest'
-      args  '-v /var/run/docker.sock:/var/run/docker.sock'
-    }
-  }
-  steps {
-    withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-      sh '''
-      echo "===== 🚀 DOCKER PUSH =====" >> build_report.txt
-      echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin >> build_report.txt 2>&1
-      docker push $DOCKER_IMAGE >> build_report.txt 2>&1
-      '''
-    }
-  }
-}
+        // ✅ Trivy
+        stage('Image Scan - Trivy') {
+          steps {
+            sh '''
+              echo "\\n===== 🐳 TRIVY IMAGE SCAN =====" >> build_report.txt
+              trivy image $DOCKER_IMAGE >> build_report.txt 2>&1 || true
+            '''
+          }
+        }
 
+        // ✅ Push to Docker Hub
+        stage('Push Docker Image') {
+          steps {
+            withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+              sh '''
+                echo "\\n===== 🚀 DOCKER PUSH =====" >> build_report.txt
+                echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin >> build_report.txt 2>&1
+                docker push $DOCKER_IMAGE >> build_report.txt 2>&1
+              '''
+            }
+          }
+        }
+
+        // ✅ Terraform
         stage('Terraform Apply') {
           steps {
             dir('terraform') {
@@ -129,6 +129,7 @@ pipeline {
           }
         }
 
+        // ✅ K8s Deploy
         stage('Deploy to Kubernetes') {
           steps {
             sh '''
