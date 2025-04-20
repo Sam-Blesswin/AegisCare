@@ -1,0 +1,240 @@
+{
+  "id": null,
+  "uid": "54523010",
+  "title": "AegisCare Monitoring",
+  "tags": [
+    "kubernetes",
+    "monitoring",
+    "aegiscare"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 37,
+  "version": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "2025-04-16T17:34:33.412840Z",
+    "to": "2025-04-16T18:34:33.412840Z"
+  },
+  "panels": [
+    {
+      "type": "graph",
+      "title": "CPU Usage (Pods)",
+      "targets": [
+        {
+          "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"staging\", pod=~\"aegiscare.*\"}[1m])) by (pod)",
+          "legendFormat": "{{pod}}",
+          "refId": "A"
+        }
+      ],
+      "alert": {
+        "name": "High Pod CPU Usage",
+        "conditions": [
+          {
+            "evaluator": {
+              "params": [
+                80
+              ],
+              "type": "gt"
+            },
+            "operator": {
+              "type": "and"
+            },
+            "query": {
+              "params": [
+                "A",
+                "5m",
+                "now"
+              ]
+            },
+            "reducer": {
+              "type": "avg"
+            },
+            "type": "query"
+          }
+        ],
+        "executionErrorState": "alerting",
+        "for": "1m",
+        "frequency": "30s",
+        "handler": 1,
+        "noDataState": "no_data"
+      },
+      "datasource": "Prometheus",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "id": 1
+    },
+    {
+      "type": "graph",
+      "title": "Memory Usage (Pods)",
+      "targets": [
+        {
+          "expr": "sum(rate(container_memory_usage_bytes{namespace=\"staging\", pod=~\"aegiscare.*\"}[1m])) by (pod) / 1048576",
+          "legendFormat": "{{pod}}"
+        }
+      ],
+      "alert": {
+        "name": "High Pod Memory Usage",
+        "conditions": [
+          {
+            "evaluator": {
+              "params": [
+                75
+              ],
+              "type": "gt"
+            },
+            "operator": {
+              "type": "and"
+            },
+            "query": {
+              "params": [
+                "A",
+                "5m",
+                "now"
+              ]
+            },
+            "reducer": {
+              "type": "avg"
+            },
+            "type": "query"
+          }
+        ],
+        "executionErrorState": "alerting",
+        "for": "1m",
+        "frequency": "30s",
+        "handler": 1,
+        "noDataState": "no_data"
+      },
+      "datasource": "Prometheus",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "id": 2
+    },
+    {
+      "type": "stat",
+      "title": "Number of Pods per Node",
+      "targets": [
+        {
+          "expr": "count(kube_pod_info{namespace=\"staging\"}) by (node)",
+          "legendFormat": "{{node}}"
+        }
+      ],
+      "datasource": "Prometheus",
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 6
+      },
+      "id": 3
+    },
+    {
+      "type": "graph",
+      "title": "Request Count (/second)",
+      "targets": [
+        {
+          "expr": "sum by (handler) (rate(http_requests_total[1m]))",
+          "legendFormat": "req/sec"
+        }
+      ],
+      "alert": {
+        "name": "Spike in API Requests",
+        "conditions": [
+          {
+            "evaluator": {
+              "params": [
+                100
+              ],
+              "type": "gt"
+            },
+            "operator": {
+              "type": "and"
+            },
+            "query": {
+              "params": [
+                "A",
+                "5m",
+                "now"
+              ]
+            },
+            "reducer": {
+              "type": "avg"
+            },
+            "type": "query"
+          }
+        ],
+        "executionErrorState": "alerting",
+        "for": "1m",
+        "frequency": "30s",
+        "handler": 1,
+        "noDataState": "no_data"
+      },
+      "datasource": "Prometheus",
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 6
+      },
+      "id": 4
+    },
+    {
+      "type": "table",
+      "title": "Requests Per Endpoint",
+      "targets": [
+        {
+          "expr": "sum by (method, path) (rate(http_requests_total[1m]))"
+        }
+      ],
+      "datasource": "Prometheus",
+      "gridPos": {
+        "x": 0,
+        "y": 14,
+        "w": 12,
+        "h": 8
+      },
+      "id": 5
+    },
+    {
+      "type": "table",
+      "title": "500 Errors by Endpoint",
+      "targets": [
+        {
+          "expr": "sum by (path) (increase(http_requests_total{status=\"500\"}[5m]))"
+        }
+      ],
+      "datasource": "Prometheus",
+      "gridPos": {
+        "x": 12,
+        "y": 14,
+        "w": 12,
+        "h": 8
+      },
+      "id": 6
+    },
+    {
+      "type": "stat",
+      "title": "Top Hit Endpoints",
+      "targets": [
+        {
+          "expr": "topk(5, sum(rate(http_requests_total[1m])) by (path))"
+        }
+      ],
+      "datasource": "Prometheus",
+      "gridPos": {
+        "x": 0,
+        "y": 22,
+        "w": 24,
+        "h": 6
+      },
+      "id": 7
+    }
+  ]
+}

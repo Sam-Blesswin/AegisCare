@@ -1,8 +1,11 @@
 # This file is the main entry point for the FastAPI application.
 # It initializes the FastAPI app, sets up the database, and includes the API routes.
 
+import time
+from urllib.request import Request
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_fastapi_instrumentator.metrics import Info
 from prometheus_fastapi_instrumentator import Instrumentator
 from app.routes import (
     auth_routes,
@@ -13,6 +16,7 @@ from app.routes import (
 )
 from app.database import init_db
 import os
+import logging
 
 
 app = FastAPI(
@@ -28,7 +32,14 @@ app.add_middleware(
 )
 
 # Prometheus metrics
-Instrumentator().instrument(app).expose(app)
+# Instrument the app with Prometheus metrics
+Instrumentator().add(
+    Info(
+        "endpoint_info",
+        "Extra info per endpoint",
+        labels={"method": lambda r: r.method, "path": lambda r: r.url.path},
+    )
+).instrument(app).expose(app)
 
 # Initialize DB
 init_db()

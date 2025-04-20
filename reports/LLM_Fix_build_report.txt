@@ -1,0 +1,131 @@
+Based on the full **CI/CD build report**, here’s a categorized summary of **major security issues** found in your project, **why they matter**, and **how to fix them**.
+
+---
+
+## 🔥 CRITICAL SECURITY ISSUES
+
+### 1. **Hardcoded Secrets** (BLOCKER)
+- **Files**: `backend/app/database.py`, `backend/app/auth.py`
+- **Issues**:
+  - Hardcoded PostgreSQL passwords (`line 9` & `11`)
+  - Hardcoded JWT secret `SECRET_KEY = "myjwt"`
+- **Why it’s bad**: Exposed secrets can easily be harvested by attackers.
+- **Fix**:
+  - Move secrets to environment variables or use Kubernetes Secrets.
+  - Example:
+    ```python
+    import os
+    SECRET_KEY = os.getenv("JWT_SECRET_KEY", "fallback-dev-key")
+    ```
+
+---
+
+### 2. **SQL Injection Vectors** (MEDIUM)
+- **File**: `portfolio_routes.py`  
+- **Lines**: 15, 24
+- **Issue**: Raw SQL queries using f-strings:
+  ```python
+  text(f"SELECT * FROM users WHERE username = '{username}'")
+  ```
+- **Fix**: Use SQLAlchemy parameterized queries:
+  ```python
+  db.execute(text("SELECT * FROM users WHERE username = :username"), {"username": username})
+  ```
+
+---
+
+### 3. **Insecure Random Generator for Fake Users** (LOW)
+- **File**: `load_routes.py`  
+- **Line**: 27
+- **Issue**: Using `random.randint()` for fake usernames.
+- **Fix**: Use `secrets` module for anything related to security or user identity:
+  ```python
+  import secrets
+  fake_username = f"user{secrets.randbelow(9000) + 1000}"
+  ```
+
+---
+
+### 4. **Unbounded HTTP Requests** (MEDIUM)
+- **File**: `report_routes.py`  
+- **Line**: 14
+- **Issue**: `requests.get(url)` without a timeout.
+- **Fix**: Add timeout to prevent DoS or long-hang:
+  ```python
+  res = requests.get(url, timeout=3)
+  ```
+
+---
+
+## 🧱 INFRASTRUCTURE & DEPLOYMENT ISSUES (CHECKOV)
+
+### 1. **Kubernetes Deployment Misconfigurations**:
+- **File**: `k8s/deployment.yml`
+- **Key Missing Elements**:
+  - `readOnlyRootFilesystem: true`
+  - `runAsNonRoot: true`, `runAsUser: 1000`
+  - `securityContext.capabilities.drop: ["ALL"]`
+  - `livenessProbe` and `readinessProbe` configs
+  - `resources.requests` and `resources.limits` for CPU/memory
+  - Use **image digests** instead of `:latest` tag
+  - Disable auto-mounted **serviceAccount tokens**
+
+- **Fix**: Here’s a sample secure `securityContext` you can embed:
+  ```yaml
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: ["ALL"]
+  ```
+
+---
+
+## 🐳 DOCKER ISSUES
+
+### 1. **Base Image CVEs** (LOW Severity)
+- Detected via **Trivy** in Debian `12.10` base image (e.g., CVE-2016-2781, CVE-2022-0563).
+- **Fix**:
+  - Regularly update base image:
+    ```Dockerfile
+    FROM python:3.10-slim
+    RUN apt-get update && apt-get upgrade -y
+    ```
+  - Consider switching to **distroless** or Alpine base for production.
+
+---
+
+## 🧪 SONARQUBE - MAINTAINABILITY ISSUES
+
+### 1. **Dead/Commented-Out Code**
+- **File**: `database.py`  
+- **Line**: 11
+- **Fix**: Clean unused or commented credentials to avoid confusion or potential leaks.
+
+---
+
+## 🧪 SUGGESTED NEXT STEPS
+
+### ✅ Codebase:
+- Use `.env` + `python-dotenv` or `secrets/` volume mounts.
+- Use parameterized queries for **all SQL statements**.
+- Add request `timeout` and use `secrets` instead of `random`.
+
+### ✅ Kubernetes:
+- Harden pod specs with securityContext, probes, limits.
+- Replace `latest` image tag with pinned digest.
+- Inject secrets via Kubernetes `Secrets`.
+
+### ✅ Pipeline:
+- Fail builds if SonarQube, Bandit, or Trivy detect **BLOCKER** or **HIGH** issues.
+- Integrate a GitHub webhook to block merges unless all tools pass.
+
+---
+
+If you want, I can now auto-generate:
+- ✅ A secure version of your `database.py`  
+- ✅ A hardened `k8s/deployment.yaml`  
+- ✅ A `.env` loading pattern for secrets  
+Let me know which one you'd like to tackle first.

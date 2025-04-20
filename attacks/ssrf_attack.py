@@ -2,10 +2,8 @@ import requests
 
 targets = [
     "http://127.0.0.1:8000/metrics",
-    "http://127.0.0.1:5432",
-    "http://aegiscare-app.staging.svc.cluster.local:8000/metrics",
-    "http://169.254.169.254/latest/meta-data",
-    "http://kubernetes.default.svc",
+    "http://localhost:8080/job/aegiscare-pipeline/",
+    "http://127.0.0.1:3000/d/dej3ipiisxs00d/aegiscare?orgId=1&from=now-6h&to=now&timezone=browser",
 ]
 
 for url in targets:
